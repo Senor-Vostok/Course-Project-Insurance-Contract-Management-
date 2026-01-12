@@ -27,29 +27,40 @@ class InsuranceService:
 
         if action == Action.ASSESS_RISK:
             risk_percent = int(data.get("risk_percent", -1))
-            type_ids = data.get("type_ids", [])
+            type_id = data.get("insurance_type_id", None)
+
             if risk_percent < 0 or risk_percent > 100:
                 raise ValueError("Процент риска должен быть в диапазоне 0..100")
-            if not isinstance(type_ids, list):
-                raise ValueError("type_ids должен быть списком")
-            if len(type_ids) == 0:
-                raise ValueError("Нужно выбрать хотя бы один вид страхования")
 
-            db.set_underwriter_assessment(application_id, risk_percent=risk_percent, type_ids=type_ids)
+            if type_id is None:
+                raise ValueError("Нужно выбрать вид страхования")
+
+            t = db.get_insurance_type(int(type_id))
+            if not t or int(t.get("is_active", 0)) != 1:
+                raise ValueError("Выбранный вид страхования недоступен")
+
+            db.set_underwriter_assessment(application_id, risk_percent=risk_percent, insurance_type_id=int(type_id))
             db.set_application_status(application_id, ApplicationStatus.RISK_ANALYSIS)
 
         elif action == Action.APPROVE:
-            tariff = data.get("tariff_amount", None)
-            if tariff is None:
-                raise ValueError("При одобрении нужно указать сумму тарифа")
-            try:
-                tariff_val = float(tariff)
-            except Exception:
-                raise ValueError("Тариф должен быть числом")
-            if tariff_val <= 0:
-                raise ValueError("Тариф должен быть больше 0")
+            insurance_sum = data.get("insurance_sum", None)
+            tariff_rate = data.get("tariff_rate", None)
 
-            db.set_admin_decision(application_id, tariff_amount=tariff_val)
+            if insurance_sum is None or tariff_rate is None:
+                raise ValueError("Нужно указать страховую сумму и тарифную ставку (%)")
+
+            try:
+                insurance_sum_val = float(str(insurance_sum).replace(",", "."))
+                tariff_rate_val = float(str(tariff_rate).replace(",", "."))
+            except Exception:
+                raise ValueError("Сумма и ставка должны быть числами")
+
+            if insurance_sum_val <= 0:
+                raise ValueError("Страховая сумма должна быть > 0")
+            if tariff_rate_val <= 0:
+                raise ValueError("Тарифная ставка должна быть > 0")
+
+            db.set_admin_decision(application_id, insurance_sum=insurance_sum_val, tariff_rate=tariff_rate_val)
             db.set_application_status(application_id, ApplicationStatus.APPROVED)
 
         elif action == Action.REJECT:
@@ -59,12 +70,18 @@ class InsuranceService:
             branch_id = data.get("branch_id", None)
             if branch_id is None:
                 raise ValueError("Нужно выбрать филиал для договора")
-            try:
-                branch_id_int = int(branch_id)
-            except Exception:
-                raise ValueError("Некорректный филиал")
 
-            branch = db.get_branch(branch_id_int)
+            # проверка обязательных данных договора из заявки
+            app = db.get_application(application_id)
+            if not app:
+                raise ValueError("Заявка не найдена")
+
+            if app.get("insurance_type_id") is None:
+                raise ValueError("Нельзя подготовить договор: не выбран вид страхования (нужен андеррайтер)")
+            if app.get("insurance_sum") is None or app.get("tariff_rate") is None or app.get("tariff_amount") is None:
+                raise ValueError("Нельзя подготовить договор: не заполнены сумма/ставка (нужен администратор)")
+
+            branch = db.get_branch(int(branch_id))
             if not branch or branch["status"] != "APPROVED" or int(branch["approved_by_lawyer"]) != 1:
                 raise ValueError("Выбранный филиал не одобрен юристом или не найден")
 
@@ -74,9 +91,7 @@ class InsuranceService:
 
             contract = db.get_contract_by_application(application_id)
             if not contract:
-                db.create_contract(application_id, branch_id=branch_id_int, draft_text=draft_text)
-            else:
-                db.set_contract_flags(application_id, branch_id=branch_id_int, draft_text=draft_text, status="prepared")
+                db.create_contract_from_application(application_id, branch_id=int(branch_id), draft_text=draft_text)
 
             db.set_application_status(application_id, ApplicationStatus.CONTRACT_PREPARED)
 

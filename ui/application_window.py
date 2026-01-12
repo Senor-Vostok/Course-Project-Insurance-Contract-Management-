@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
     QPushButton, QMessageBox, QListWidget, QGroupBox, QHBoxLayout,
-    QSpacerItem, QSizePolicy, QSlider, QCheckBox, QTextEdit, QLineEdit, QComboBox
+    QSpacerItem, QSizePolicy, QSlider, QTextEdit, QLineEdit, QComboBox
 )
 from PyQt5.QtCore import Qt
 
@@ -30,7 +30,7 @@ class ApplicationWindow(QWidget):
         self.service = InsuranceService()
 
         self.setWindowTitle(f"Заявка #{application_id}")
-        self.resize(920, 680)
+        self.resize(920, 720)
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -48,7 +48,6 @@ class ApplicationWindow(QWidget):
         header.addWidget(self.badge)
         root.addLayout(header)
 
-        # Общая информация
         info_box = QGroupBox("Информация по заявке")
         info_l = QVBoxLayout()
         self.info_label = QLabel()
@@ -57,14 +56,12 @@ class ApplicationWindow(QWidget):
         info_box.setLayout(info_l)
         root.addWidget(info_box)
 
-        # Роль-ориентированный блок действий
         self.role_box = QGroupBox("Действия")
         self.role_l = QVBoxLayout()
         self.role_l.setSpacing(10)
         self.role_box.setLayout(self.role_l)
         root.addWidget(self.role_box)
 
-        # Договор (показывается только когда полезно)
         self.contract_box = QGroupBox("Договор")
         contract_l = QVBoxLayout()
         self.contract_label = QLabel()
@@ -78,7 +75,6 @@ class ApplicationWindow(QWidget):
         self.contract_box.setLayout(contract_l)
         root.addWidget(self.contract_box)
 
-        # Лог
         logs_box = QGroupBox("Лог (в памяти)")
         logs_l = QVBoxLayout()
         self.log_list = QListWidget()
@@ -108,7 +104,7 @@ class ApplicationWindow(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Ошибка", str(e))
 
-    # ---- UI builders ----
+    # ---- role UIs ----
 
     def _build_client_ui(self, status: ApplicationStatus):
         if self._allowed_for_user(status, Action.CLIENT_SIGN):
@@ -123,8 +119,9 @@ class ApplicationWindow(QWidget):
             self.role_l.addWidget(QLabel("Нет действий по этой заявке на текущем этапе."))
             return
 
-        box = QGroupBox("Оценка риска")
+        box = QGroupBox("Оценка риска и выбор вида страхования")
         l = QVBoxLayout()
+        l.setSpacing(8)
 
         self.risk_slider = QSlider(Qt.Horizontal)
         self.risk_slider.setMinimum(0)
@@ -138,24 +135,15 @@ class ApplicationWindow(QWidget):
         l.addWidget(self.risk_value)
         l.addWidget(self.risk_slider)
 
-        types_box = QGroupBox("Виды страхования (из БД)")
-        tl = QVBoxLayout()
-        self.type_checks = []
+        self.type_combo = QComboBox()
+        self.type_combo.addItem("Выберите вид страхования...", None)
+        for t in db.list_insurance_types(active_only=True):
+            self.type_combo.addItem(t["name"], int(t["id"]))
 
-        types = db.list_insurance_types(active_only=True)
-        if not types:
-            tl.addWidget(QLabel("Виды страхования не найдены в БД."))
-        else:
-            for t in types:
-                cb = QCheckBox(t["name"])
-                cb.setProperty("type_id", int(t["id"]))
-                tl.addWidget(cb)
-                self.type_checks.append(cb)
+        l.addWidget(QLabel("Вид страхования (из БД):"))
+        l.addWidget(self.type_combo)
 
-        types_box.setLayout(tl)
-        l.addWidget(types_box)
-
-        submit = QPushButton("Сохранить оценку и отправить администратору")
+        submit = QPushButton("Сохранить и отправить администратору")
         submit.clicked.connect(self._submit_underwriter)
         l.addWidget(submit)
 
@@ -164,8 +152,11 @@ class ApplicationWindow(QWidget):
 
     def _submit_underwriter(self):
         risk = int(self.risk_slider.value())
-        selected = [int(cb.property("type_id")) for cb in self.type_checks if cb.isChecked()]
-        self._run(Action.ASSESS_RISK, data={"risk_percent": risk, "type_ids": selected})
+        type_id = self.type_combo.currentData()
+        if type_id is None:
+            QMessageBox.warning(self, "Ошибка", "Выберите вид страхования.")
+            return
+        self._run(Action.ASSESS_RISK, data={"risk_percent": risk, "insurance_type_id": int(type_id)})
 
     def _build_admin_ui(self, status: ApplicationStatus):
         if not (self._allowed_for_user(status, Action.APPROVE) or self._allowed_for_user(status, Action.REJECT)):
@@ -174,19 +165,24 @@ class ApplicationWindow(QWidget):
 
         box = QGroupBox("Решение администратора")
         l = QVBoxLayout()
+        l.setSpacing(8)
 
-        self.tariff_input = QLineEdit()
-        self.tariff_input.setPlaceholderText("Сумма тарифа (например: 12000)")
+        self.sum_input = QLineEdit()
+        self.sum_input.setPlaceholderText("Страховая сумма (например: 500000)")
+
+        self.rate_input = QLineEdit()
+        self.rate_input.setPlaceholderText("Тарифная ставка % (например: 2.5)")
 
         approve = QPushButton("Одобрить")
-        approve.clicked.connect(self._approve_with_tariff)
+        approve.clicked.connect(self._approve_with_sum_rate)
 
         reject = QPushButton("Отклонить")
         reject.setObjectName("Secondary")
         reject.clicked.connect(lambda: self._run(Action.REJECT))
 
-        l.addWidget(QLabel("При одобрении укажите сумму тарифа:"))
-        l.addWidget(self.tariff_input)
+        l.addWidget(QLabel("При одобрении укажите страховую сумму и тарифную ставку:"))
+        l.addWidget(self.sum_input)
+        l.addWidget(self.rate_input)
 
         row = QHBoxLayout()
         row.addWidget(approve)
@@ -196,22 +192,25 @@ class ApplicationWindow(QWidget):
         box.setLayout(l)
         self.role_l.addWidget(box)
 
-    def _approve_with_tariff(self):
-        txt = self.tariff_input.text().strip().replace(",", ".")
-        self._run(Action.APPROVE, data={"tariff_amount": txt})
+    def _approve_with_sum_rate(self):
+        s = self.sum_input.text().strip().replace(",", ".")
+        r = self.rate_input.text().strip().replace(",", ".")
+        self._run(Action.APPROVE, data={"insurance_sum": s, "tariff_rate": r})
 
     def _build_lawyer_ui(self, status: ApplicationStatus):
         if self._allowed_for_user(status, Action.PREPARE_CONTRACT):
             box = QGroupBox("Подготовка договора")
             l = QVBoxLayout()
+            l.setSpacing(8)
 
             branches = db.list_approved_branches()
             self.branch_combo = QComboBox()
             self.branch_combo.addItem("Выберите филиал...", None)
             for b in branches:
-                self.branch_combo.addItem(b["branch_name"], int(b["id"]))
+                label = f"{b['branch_name']} — {b.get('address','')} — {b.get('phone','')}"
+                self.branch_combo.addItem(label, int(b["id"]))
 
-            l.addWidget(QLabel("Юридически зарегистрированный филиал:"))
+            l.addWidget(QLabel("Филиал, в котором заключался договор:"))
             l.addWidget(self.branch_combo)
 
             l.addWidget(QLabel("Проект договора:"))
@@ -246,7 +245,7 @@ class ApplicationWindow(QWidget):
             QMessageBox.warning(self, "Ошибка", "Выберите филиал.")
             return
         draft = self.draft_edit.toPlainText().strip()
-        self._run(Action.PREPARE_CONTRACT, data={"branch_id": branch_id, "draft_text": draft})
+        self._run(Action.PREPARE_CONTRACT, data={"branch_id": int(branch_id), "draft_text": draft})
 
     def _build_director_ui(self, status: ApplicationStatus):
         if self._allowed_for_user(status, Action.DIRECTOR_SIGN):
@@ -267,14 +266,16 @@ class ApplicationWindow(QWidget):
         status = ApplicationStatus[app["status"]]
         status_pretty = _status_pretty(app["status"])
 
-        type_ids = db.get_application_type_ids(self.application_id)
-        types = db.list_insurance_types(active_only=False)
-        type_map = {int(t["id"]): t["name"] for t in types}
-        chosen_types = [type_map.get(tid, f"#{tid}") for tid in type_ids]
-        chosen_types_txt = ", ".join(chosen_types) if chosen_types else "—"
+        # вид страхования (1)
+        type_name = "—"
+        if app.get("insurance_type_id") is not None:
+            t = db.get_insurance_type(int(app["insurance_type_id"]))
+            if t:
+                type_name = t["name"]
 
-        tariff = app.get("tariff_amount", None)
-        tariff_txt = f"{tariff}" if tariff is not None else "—"
+        insurance_sum = app.get("insurance_sum")
+        tariff_rate = app.get("tariff_rate")
+        tariff_amount = app.get("tariff_amount")
 
         self.info_label.setText(
             f"ФИО клиента: {app.get('client_fio', '')}\n"
@@ -282,15 +283,17 @@ class ApplicationWindow(QWidget):
             f"Описание: {app.get('request_text', '')}\n\n"
             f"Статус: {status_pretty}\n"
             f"Риск: {int(app.get('risk_percent') or 0)}%\n"
-            f"Виды страхования: {chosen_types_txt}\n"
-            f"Тариф: {tariff_txt}\n"
+            f"Вид страхования: {type_name}\n"
+            f"Страховая сумма: {insurance_sum if insurance_sum is not None else '—'}\n"
+            f"Тарифная ставка (%): {tariff_rate if tariff_rate is not None else '—'}\n"
+            f"Тариф к оплате: {tariff_amount if tariff_amount is not None else '—'}\n"
             f"updated_at: {app.get('updated_at')}"
         )
 
         contract = db.get_contract_by_application(self.application_id)
         show_contract = bool(contract) or (self.user.role == Role.LAWYER and status == ApplicationStatus.APPROVED)
-
         self.contract_box.setVisible(show_contract)
+
         if not show_contract:
             self.contract_label.setText("")
             self.contract_draft.setVisible(False)
@@ -303,16 +306,27 @@ class ApplicationWindow(QWidget):
                 if contract.get("branch_id"):
                     b = db.get_branch(int(contract["branch_id"]))
                     if b:
-                        branch_name = b.get("branch_name", "—")
+                        branch_name = f"{b.get('branch_name','')} ({b.get('address','')}, {b.get('phone','')})"
+
+                c_type = "—"
+                if contract.get("insurance_type_id") is not None:
+                    t = db.get_insurance_type(int(contract["insurance_type_id"]))
+                    if t:
+                        c_type = t["name"]
 
                 self.contract_label.setText(
-                    f"Статус договора: {contract.get('status')}\n"
+                    f"Дата заключения: {contract.get('contract_date','—')}\n"
                     f"Филиал: {branch_name}\n"
+                    f"Вид страхования: {c_type}\n"
+                    f"Страховая сумма: {contract.get('insurance_sum','—')}\n"
+                    f"Тарифная ставка (%): {contract.get('tariff_rate','—')}\n"
+                    f"Тариф к оплате: {contract.get('tariff_amount','—')}\n\n"
                     f"Подписано клиентом: {bool(contract.get('client_signed'))}\n"
                     f"Подписано директором: {bool(contract.get('director_signed'))}\n"
                     f"Архивировано: {bool(contract.get('archived'))}\n"
                     f"updated_at: {contract.get('updated_at')}"
                 )
+
                 if self.user.role == Role.LAWYER:
                     self.contract_draft.setVisible(True)
                     self.contract_draft.setPlainText(contract.get("draft_text") or "")

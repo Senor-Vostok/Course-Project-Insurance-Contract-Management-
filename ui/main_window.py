@@ -29,7 +29,6 @@ def _branch_status_pretty(status_name: str) -> str:
 
 
 def _needs_user_action(app_row: dict, user: User) -> bool:
-    """Показываем только то, где пользователь реально может выполнить действие сейчас."""
     try:
         status = ApplicationStatus[app_row["status"]]
     except Exception:
@@ -47,8 +46,8 @@ def _needs_user_action(app_row: dict, user: User) -> bool:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Черновик на базе BPMN")
-        self.resize(980, 640)
+        self.setWindowTitle("Insurance BPMN MVP")
+        self.resize(980, 700)
 
         self._init_users()
         self._init_ui()
@@ -57,11 +56,11 @@ class MainWindow(QMainWindow):
     def _init_users(self):
         if not storage.users:
             storage.users = [
-                User(1, "User", Role.CLIENT),
-                User(2, "User", Role.UNDERWRITER),
-                User(3, "User", Role.ADMIN),
-                User(4, "User", Role.LAWYER),
-                User(5, "User", Role.BRANCH_DIRECTOR),
+                User(1, "Иван", Role.CLIENT),
+                User(2, "Ольга", Role.UNDERWRITER),
+                User(3, "Сергей", Role.ADMIN),
+                User(4, "Анна", Role.LAWYER),
+                User(5, "Дмитрий", Role.BRANCH_DIRECTOR),
             ]
 
     def _init_ui(self):
@@ -70,7 +69,7 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(12)
 
-        title = QLabel("Черновик на базе BPMN")
+        title = QLabel("Insurance BPMN MVP — роль-ориентированный интерфейс")
         title.setObjectName("Title")
         root.addWidget(title)
 
@@ -100,23 +99,22 @@ class MainWindow(QMainWindow):
 
         self.create_stack = QStackedWidget()
 
-        # 0) пусто
         empty = QWidget()
         self.create_stack.addWidget(empty)
 
-        # 1) Клиент: создать страховую заявку
+        # Клиент: создать заявку
         self.client_create = QWidget()
         cl = QVBoxLayout()
         cl.setSpacing(8)
 
         self.client_fio = QLineEdit()
-        self.client_fio.setPlaceholderText("ФИО (например: Иванов Иван Иванович)")
+        self.client_fio.setPlaceholderText("ФИО")
 
         self.client_object = QLineEdit()
-        self.client_object.setPlaceholderText("Объект страхования (например: квартира, авто, склад...)")
+        self.client_object.setPlaceholderText("Объект страхования")
 
         self.client_text = QTextEdit()
-        self.client_text.setPlaceholderText("Текстовая справка: что хотите застраховать и от каких рисков...")
+        self.client_text.setPlaceholderText("Что страхуем и от чего (текстовая справка)...")
 
         self.client_create_btn = QPushButton("Создать заявку")
         self.client_create_btn.clicked.connect(self.create_application_from_client)
@@ -129,18 +127,26 @@ class MainWindow(QMainWindow):
         self.client_create.setLayout(cl)
         self.create_stack.addWidget(self.client_create)
 
-        # 2) Директор: создать филиал
+        # Директор: создать филиал (имя + адрес + телефон)
         self.branch_create = QWidget()
         bl = QVBoxLayout()
         bl.setSpacing(8)
 
         self.branch_name = QLineEdit()
-        self.branch_name.setPlaceholderText("Название филиала (юридически зарегистрированный)")
+        self.branch_name.setPlaceholderText("Название филиала")
+
+        self.branch_address = QLineEdit()
+        self.branch_address.setPlaceholderText("Адрес филиала")
+
+        self.branch_phone = QLineEdit()
+        self.branch_phone.setPlaceholderText("Телефон филиала")
 
         self.branch_create_btn = QPushButton("Создать заявку на филиал")
         self.branch_create_btn.clicked.connect(self.create_branch_from_director)
 
         bl.addWidget(self.branch_name)
+        bl.addWidget(self.branch_address)
+        bl.addWidget(self.branch_phone)
         bl.addWidget(self.branch_create_btn)
 
         self.branch_create.setLayout(bl)
@@ -214,16 +220,9 @@ class MainWindow(QMainWindow):
             return
 
         if section == "applications":
-            if user.role == Role.CLIENT:
-                self.create_stack.setCurrentWidget(self.client_create)
-            else:
-                self.create_stack.setCurrentIndex(0)
-
+            self.create_stack.setCurrentWidget(self.client_create if user.role == Role.CLIENT else self.create_stack.widget(0))
         elif section == "branches":
-            if user.role == Role.BRANCH_DIRECTOR:
-                self.create_stack.setCurrentWidget(self.branch_create)
-            else:
-                self.create_stack.setCurrentIndex(0)
+            self.create_stack.setCurrentWidget(self.branch_create if user.role == Role.BRANCH_DIRECTOR else self.create_stack.widget(0))
 
     def refresh_current_list(self):
         self._rebuild_create_panel_for_role()
@@ -237,18 +236,11 @@ class MainWindow(QMainWindow):
 
         if section == "branches":
             branches = db.list_branches()
-
             filtered = []
             if user.role == Role.LAWYER:
-                for b in branches:
-                    if b["status"] == BranchStatus.PENDING.name and int(b["approved_by_lawyer"]) == 0:
-                        filtered.append(b)
+                filtered = [b for b in branches if b["status"] == BranchStatus.PENDING.name and int(b["approved_by_lawyer"]) == 0]
             elif user.role == Role.BRANCH_DIRECTOR:
-                for b in branches:
-                    if b.get("created_by") == user.name:
-                        filtered.append(b)
-            else:
-                filtered = []
+                filtered = [b for b in branches if b.get("created_by") == user.name]
 
             for b in filtered:
                 st = _branch_status_pretty(b["status"])
@@ -258,12 +250,9 @@ class MainWindow(QMainWindow):
 
         apps = db.list_applications()
         actionable = [a for a in apps if _needs_user_action(a, user)]
-
         for a in actionable:
             st = _app_status_pretty(a["status"])
-            fio = a.get("client_fio", "")
-            obj = a.get("insured_object", "")
-            self.list_widget.addItem(f"Заявка #{a['id']}  •  {st}  •  {fio}  •  {obj}")
+            self.list_widget.addItem(f"Заявка #{a['id']}  •  {st}  •  {a.get('client_fio','')}  •  {a.get('insured_object','')}")
         self.hint.setText(f"Заявок, требующих вашего действия: {len(actionable)}")
 
     def create_application_from_client(self):
@@ -285,11 +274,10 @@ class MainWindow(QMainWindow):
 
             new_id = db.create_application(user.name, client_fio=fio, insured_object=obj, request_text=txt)
             storage.log(f"Клиент '{user.name}' создал заявку #{new_id}")
-            self.client_object.clear()
             self.client_fio.clear()
+            self.client_object.clear()
             self.client_text.clear()
             self.refresh_current_list()
-
         except Exception as e:
             QMessageBox.warning(self, "Ошибка", str(e))
 
@@ -299,12 +287,22 @@ class MainWindow(QMainWindow):
             return
 
         name = self.branch_name.text().strip()
+        address = self.branch_address.text().strip()
+        phone = self.branch_phone.text().strip()
+
         try:
             if not name:
                 raise ValueError("Укажи название филиала.")
-            new_id = db.create_branch_request(name, created_by=user.name)
+            if not address:
+                raise ValueError("Укажи адрес филиала.")
+            if not phone:
+                raise ValueError("Укажи телефон филиала.")
+
+            new_id = db.create_branch_request(name, address=address, phone=phone, created_by=user.name)
             storage.log(f"Директор '{user.name}' создал заявку на филиал #{new_id} ({name})")
             self.branch_name.clear()
+            self.branch_address.clear()
+            self.branch_phone.clear()
             self.refresh_current_list()
         except Exception as e:
             QMessageBox.warning(self, "Ошибка", str(e))
@@ -324,8 +322,7 @@ class MainWindow(QMainWindow):
             if section == "branches":
                 all_branches = db.list_branches()
                 if user.role == Role.LAWYER:
-                    filtered = [b for b in all_branches if
-                                b["status"] == BranchStatus.PENDING.name and int(b["approved_by_lawyer"]) == 0]
+                    filtered = [b for b in all_branches if b["status"] == BranchStatus.PENDING.name and int(b["approved_by_lawyer"]) == 0]
                 elif user.role == Role.BRANCH_DIRECTOR:
                     filtered = [b for b in all_branches if b.get("created_by") == user.name]
                 else:
@@ -333,8 +330,7 @@ class MainWindow(QMainWindow):
 
                 if row >= len(filtered):
                     return
-                branch_id = filtered[row]["id"]
-                self.branch_window = BranchWindow(branch_id, user, self)
+                self.branch_window = BranchWindow(filtered[row]["id"], user, self)
                 self.branch_window.show()
                 return
 
@@ -342,8 +338,7 @@ class MainWindow(QMainWindow):
             actionable = [a for a in all_apps if _needs_user_action(a, user)]
             if row >= len(actionable):
                 return
-            app_id = actionable[row]["id"]
-            self.app_window = ApplicationWindow(app_id, user, self)
+            self.app_window = ApplicationWindow(actionable[row]["id"], user, self)
             self.app_window.show()
 
         except Exception as e:

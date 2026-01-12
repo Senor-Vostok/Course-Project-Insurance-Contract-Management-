@@ -20,7 +20,7 @@ class BranchWindow(QWidget):
         self.parent = parent
 
         self.setWindowTitle(f"Филиал #{branch_id}")
-        self.resize(760, 420)
+        self.resize(780, 460)
 
         root = QVBoxLayout()
         root.setContentsMargins(16, 16, 16, 16)
@@ -38,7 +38,7 @@ class BranchWindow(QWidget):
         header.addWidget(self.badge)
         root.addLayout(header)
 
-        info_box = QGroupBox("Информация")
+        info_box = QGroupBox("Информация о филиале")
         info_l = QVBoxLayout()
         self.info = QLabel()
         self.info.setWordWrap(True)
@@ -89,10 +89,12 @@ class BranchWindow(QWidget):
             return
 
         self.info.setText(
-            f"Название филиала: {branch['branch_name']}\n"
-            f"Статус: {_branch_status_pretty(branch['status'])}\n"
-            f"Создатель: {branch['created_by']}\n"
-            f"updated_at: {branch['updated_at']}"
+            f"Название: {branch.get('branch_name','')}\n"
+            f"Адрес: {branch.get('address','')}\n"
+            f"Телефон: {branch.get('phone','')}\n\n"
+            f"Статус: {_branch_status_pretty(branch.get('status',''))}\n"
+            f"Создатель: {branch.get('created_by','')}\n"
+            f"updated_at: {branch.get('updated_at','')}"
         )
 
         confirmed = bool(branch["confirmed_by_director"])
@@ -103,5 +105,4 @@ class BranchWindow(QWidget):
             f"Одобрено юристом: {approved}"
         )
 
-        can_approve = (self.user.role == Role.LAWYER) and (not approved)
-        self.approve_btn.setVisible(can_approve)
+        self.approve_btn.setVisible(self.user.role == Role.LAWYER and not approved)
