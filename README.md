@@ -9,39 +9,51 @@
 
 ### Клиент
 
-<img width="973" height="663" alt="image" src="https://github.com/user-attachments/assets/411d6559-2a9c-4f26-843f-115e94dcd868" />
+<img width="972" height="723" alt="image" src="https://github.com/user-attachments/assets/5d8c5b51-c7ca-42bd-b52f-3368639b6759" />
+
 Клиенту для создания заявки требуется ввести ФИО, имя страхового объекта и текстовое описание предпочитаемого страхового случая.
 Далее Клиенту требуется нажать на Создать заявку и ожидать появление новой задачи в окне "Мои задачи"
-<img width="905" height="698" alt="image" src="https://github.com/user-attachments/assets/0a7b011e-fb5e-421c-9ad0-7c939fd0e35e" />
+
+<img width="914" height="775" alt="image" src="https://github.com/user-attachments/assets/981cbbfb-0526-468f-a6dd-a08bf032b051" />
+
 Когда договор сформирован, его надо подписать, именно поэтому Клиенту предлагается тут его подписать
 
 ### Андеррайтер
 
-<img width="974" height="663" alt="image" src="https://github.com/user-attachments/assets/f235cea1-f9de-40cb-9f4c-b6953052ff2a" />
-<img width="912" height="790" alt="image" src="https://github.com/user-attachments/assets/4f91540a-eb0a-4eed-99f2-f8e796071d38" />
+<img width="910" height="737" alt="image" src="https://github.com/user-attachments/assets/850339ea-835e-479e-8797-6b6faa992710" />
+
 Андеррайтер получает заявку клиента и открывает её для просмотра, выставляя процент возникновения страхового случая и сам вид страхового случая.
 
 ### Администратор
 
-![img_2.png](img_2.png)
+<img width="912" height="742" alt="image" src="https://github.com/user-attachments/assets/397404f6-a6c3-4ab5-b459-dad7d53c17d0" />
+
 Далее администратор оценивает экономическую целесообразность сделки и выставляет сумму тарифа. Администратор может как отклонить заявку н данном этапе, так и отправить её на дельнейшее оформление.
 При отклонении, заявка помечается как отклоненная. И Становится видна Клиенту в статусе отклонена.
 
 ### Юрист
 
-<img width="906" height="801" alt="image" src="https://github.com/user-attachments/assets/6638c769-bca1-4566-9d46-dc71e15027b0" />
+<img width="914" height="844" alt="image" src="https://github.com/user-attachments/assets/55d0417e-91ca-463e-bd01-dff3f283c50f" />
+
 На данном этапе Юрист заполняет проект договора и отправляет его на согласование/подписание, предварительно выбрав Зарегистрированный филиал
-<img width="914" height="938" alt="image" src="https://github.com/user-attachments/assets/243926ab-e6ac-44aa-ad97-4fd92acd1109" />
+
+<img width="911" height="899" alt="image" src="https://github.com/user-attachments/assets/90541730-812c-4f80-a6cd-541f759c7bd5" />
+
 После подписание договора обоими сторонами (Клиент и Директор филиала) Договор можно считать поджписанным и его можно отправить в архив
-![img_1.png](img_1.png)
+
+<img width="771" height="483" alt="image" src="https://github.com/user-attachments/assets/49d057bb-875f-41f6-8bdf-a7e5a9243882" />
+
 Отображение интерфейса по подтверждению юридического статуса филиала, с последующим сохранением его в базу зарегистрированных филиалов
 
 ### Директор филиала
 
-<img width="908" height="700" alt="image" src="https://github.com/user-attachments/assets/b3e46551-a886-47b6-98a0-d12aff5a8f92" />
+<img width="907" height="774" alt="image" src="https://github.com/user-attachments/assets/a07ca750-033a-4c73-baf3-bbd7a199cb0e" />
+
 После того как Клиент подписал свою часть договора, договор передается Управляющему, что тот в свою очеред должен подписать. 
 Договор автоматически отправиться Юристу на проверку и Архивирование
-![img.png](img.png)
+
+<img width="972" height="723" alt="image" src="https://github.com/user-attachments/assets/bbb7303b-77ca-46a1-8bbc-b7d4e2cd71c3" />
+
 Для создания юридического филиала, предоставляется окно с возможностью ввода его названия, после чего данная заявка отправляется Юристу на согласование
 
 ## Отчет по Курсовому Проекту представлен в файле
